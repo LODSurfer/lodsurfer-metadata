@@ -8,13 +8,13 @@ public class URICollection {
 
 	static public final String PROPERTY_RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 	static public final String CLASS_RDF_PROPERTY = "http://www.w3.org/1999/02/22-rdf-syntax-ns#Property";
-
+	
 	static public final String PROPERTY_RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label";
 	static public final String RESOURCE_RDFS_CLASS = "http://www.w3.org/2000/01/rdf-schema#Class";
 	static public final String PROPERTY_RDFS_SUBCLASSOF = "http://www.w3.org/2000/01/rdf-schema#subclassOf";
 	static public final String PROPERTY_RDFS_DOMAIN = "http://www.w3.org/2000/01/rdf-schema#domain";
 	static public final String PROPERTY_RDFS_RANGE = "http://www.w3.org/2000/01/rdf-schema#range";
-	static public final String PROPERTY_RDFS_LITERAL = "http://www.w3.org/2000/01/rdf-schema#Literal";
+	static public final String RESOURCE_RDFS_LITERAL = "http://www.w3.org/2000/01/rdf-schema#Literal";
 	static public final String RESOURCE_RDFS_DATATYPE = "http://www.w3.org/2000/01/rdf-schema#Datatype";
 
 	static public final String RESOURCE_RDF_LANGSTRING = "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString";

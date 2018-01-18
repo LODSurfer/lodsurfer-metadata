@@ -24,7 +24,9 @@ import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
 
-public class CrawlerImpl {
+
+
+public class CrawlerImpl_datatype implements Crawler {
 
 	long INTERVAL = 500L;
 	long INTERVAL_ERROR = 5000L;
@@ -45,7 +47,7 @@ public class CrawlerImpl {
 			String endPURIStr = args[1];
 			URI endPURI = new URI(endPURIStr);
 			// graphlist
-			CrawlerImpl impl = new CrawlerImpl(endPURI);
+			CrawlerImpl_datatype impl = new CrawlerImpl_datatype(endPURI);
 			URI[] graphURIs = null;
 			graphURIs = impl.getGraphURIs();
 			if (graphURIs != null) {
@@ -61,7 +63,7 @@ public class CrawlerImpl {
 				String crawlName = args[2];
 				String outDir = args[3];
 				// graphlist
-				CrawlerImpl impl = new CrawlerImpl(endPURI, crawlName, outDir);
+				CrawlerImpl_datatype impl = new CrawlerImpl_datatype(endPURI, crawlName, outDir);
 				URI[] graphURIs = new URI[1];
 				graphURIs[0] = null;
 				impl.crawl(graphURIs);
@@ -71,7 +73,7 @@ public class CrawlerImpl {
 					URI endPURI = new URI(endPURIStr);
 					String crawlName = args[2];
 					String outDir = args[3];
-					CrawlerImpl impl = new CrawlerImpl(endPURI, crawlName, outDir);
+					CrawlerImpl_datatype impl = new CrawlerImpl_datatype(endPURI, crawlName, outDir);
 					URI[] graphURIs = null;
 					graphURIs = impl.getGraphURIs();
 					if (graphURIs == null || graphURIs.length == 0) {
@@ -97,7 +99,7 @@ public class CrawlerImpl {
 						String targetGraphURIStr = args[3];
 						URI targetGraphURI = new URI(targetGraphURIStr);
 						String outDir = args[4];
-						CrawlerImpl impl = new CrawlerImpl(endPURI, crawlName, outDir);
+						CrawlerImpl_datatype impl = new CrawlerImpl_datatype(endPURI, crawlName, outDir);
 
 						URI[] graphURIs = null;
 						graphURIs = impl.getGraphURIs();
@@ -248,7 +250,7 @@ public class CrawlerImpl {
 				System.out.println((end - start) + " msec.");
 				if (errorState) {
 					System.err.println("Error occured.");
-					// throw new Exception("Error occured s(292)");
+//					throw new Exception("Error occured s(292)");
 				}
 			} // end of for
 		}
@@ -364,6 +366,22 @@ public class CrawlerImpl {
 		}
 		System.out.println();
 
+		String[] datatypes = new String[0];
+
+		try {
+			datatypes = getDatatypes(res1);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			// TODO
+			// throw ex;
+		}
+
+		System.out.println("datatypes");
+		for (String uri : datatypes) {
+			System.out.println(uri);
+		}
+		System.out.println();
+
 		URI[] res3 = null;
 
 		try {
@@ -373,12 +391,27 @@ public class CrawlerImpl {
 			// throw ex;
 		}
 
+		HashSet<String> datatypeSet = new HashSet<String>();
+		for (String datatype : datatypes) {
+			datatypeSet.add(datatype);
+		}
+		ArrayList<URI> tmpURIList = new ArrayList<URI>();
+		if( res3 != null ) {
+		for (URI uri : res3) {
+			if (!datatypeSet.contains(uri.toString())) {
+				tmpURIList.add(uri);
+			}
+		}
+		}
+		res3 = tmpURIList.toArray(new URI[0]);
+
 		System.out.println("classes");
 		for (URI uri : res3) {
 			System.out.println(uri);
 		}
 		System.out.println();
 
+		System.out.println("\n#Decl Datatype(total): " + datatypes.length);
 		System.out.println("#Decl Class(total): " + res3.length);
 		System.out.println("#Decl Property(total): " + res1.length);
 
@@ -427,7 +460,7 @@ public class CrawlerImpl {
 
 		Schema schema = null;
 		if (res1.length != 0 && res3.length != 0) {
-			schema = getPropertySchema(wholeModel, datasetResource, res1, res3);
+			schema = getPropertySchema(wholeModel, datasetResource, res1, datatypeSet);
 			if (schema.propertyCategory == 4) {
 				schema.classCategory = 3;
 			} else {
@@ -446,6 +479,7 @@ public class CrawlerImpl {
 			schema = new Schema(wholeModel, datasetResource, 4, null, 3, 3, 0, null, null);
 		}
 		System.out.println("PropertyCategory: " + schema.propertyCategory + "  ClassCategory: " + schema.classCategory);
+
 
 		// triples
 		// int numTriples = schema.numTriples;
@@ -625,12 +659,11 @@ public class CrawlerImpl {
 			qexec = null;
 			results = null;
 
-			int sCount = 3;
+			int sCount = 10;
 			while (sCount > 0) {
 				try {
 					// long start = System.currentTimeMillis();
 					qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
-					qexec.setTimeout(-1);
 					endpointAccessCount++;
 					interval();
 					results = qexec.execSelect();
@@ -642,7 +675,7 @@ public class CrawlerImpl {
 					if (sCount == 0) {
 						System.out.println(queryString);
 						ex.printStackTrace();
-						// throw ex;
+//						throw ex;
 					} else {
 						interval_error();
 						interval_error();
@@ -652,14 +685,12 @@ public class CrawlerImpl {
 			}
 
 			// create model
-			if (results != null) {
-				for (; results.hasNext();) {
-					QuerySolution sol = results.next();
-					Literal lit = sol.getLiteral("num");
-					if (lit != null) {
-						int num = lit.getInt();
-						cpBlankRes.addLiteral(entitiesPro, num);
-					}
+			for (; results.hasNext();) {
+				QuerySolution sol = results.next();
+				Literal lit = sol.getLiteral("num");
+				if (lit != null) {
+					int num = lit.getInt();
+					cpBlankRes.addLiteral(entitiesPro, num);
 				}
 			}
 			qexec.close();
@@ -732,18 +763,9 @@ public class CrawlerImpl {
 		}
 	}
 
-	public Schema getPropertySchema(Model model, Resource datasetRes, URI[] propertyURIs, URI[] classURIs)
+	public Schema getPropertySchema(Model model, Resource datasetRes, URI[] propertyURIs, HashSet<String> datatypeSet)
 			throws Exception {
 		// String[] filterStrs = { "http://www.openlinksw" };
-
-		HashSet<String> declClassURISet = new HashSet<String>();
-		if (classURIs != null) {
-			for (URI classURI : classURIs) {
-				declClassURISet.add(classURI.toString());
-			}
-		}
-
-		Resource literalCls = model.createResource(URICollection.RESOURCE_RDFS_LITERAL);
 
 		// create model
 		Property domainPro = model.createProperty(URICollection.PROPERTY_RDFS_DOMAIN);
@@ -783,8 +805,7 @@ public class CrawlerImpl {
 		Resource classRelationCls = model.createResource(URICollection.RESOURCE_SB_CLASS_RELATION);
 		Property subjectClsPro = model.createProperty(URICollection.PROPERTY_SB_SUBJECT_CLASS);
 		Property objectClsPro = model.createProperty(URICollection.PROPERTY_SB_OBJECT_CLASS);
-		// Property objectDatatypePro =
-		// model.createProperty(URICollection.PROPERTY_SB_OBJECT_DATATYPE);
+		Property objectDatatypePro = model.createProperty(URICollection.PROPERTY_SB_OBJECT_DATATYPE);
 		Property propPro = model.createProperty(URICollection.PROPERTY_VOID_PROPERTY);
 		// Resource propProfileCls = model
 		// .createResource(URICollection.RESOURCE_SB_PROPERTY_PROFILE);
@@ -816,7 +837,6 @@ public class CrawlerImpl {
 			HashSet<String> domClassSet = new HashSet<String>();
 			HashSet<String> ranClassSet = new HashSet<String>();
 			HashSet<String> literalDatatypeSet = new HashSet<String>();
-			boolean literalFlag = false;
 
 			try {
 				// QUERY
@@ -916,7 +936,7 @@ public class CrawlerImpl {
 					if (ran != null && ran.getURI() != null) {
 						// remove rdfs:literal
 						if (!ran.getURI().equals(URICollection.RESOURCE_RDFS_LITERAL)) {
-							if (declClassURISet.contains(ran.getURI())) {
+							if (!datatypeSet.contains(ran.getURI())) {
 								ranClassSet.add(ran.getURI());
 							}
 						}
@@ -996,19 +1016,11 @@ public class CrawlerImpl {
 					if (dom != null) {
 						domURI = dom.getURI();
 					}
-					PropertyDomainRangeDecl pdrd = null;
 					String ranURI = null;
 					if (ran != null) {
 						if (!ran.getURI().equals(URICollection.RESOURCE_RDFS_LITERAL)
-								&& declClassURISet.contains(ran.getURI())) {
+								&& !datatypeSet.contains(ran.getURI())) {
 							ranURI = ran.getURI();
-							pdrd = new PropertyDomainRangeDecl(propURI, domURI, ranURI, null, 0, 0, 0,
-									false, false);
-
-						}else {
-							pdrd = new PropertyDomainRangeDecl(propURI, domURI, null, URICollection.RESOURCE_RDFS_LITERAL, 0, 0, 0,
-									false, false);
-							
 						}
 					}
 
@@ -1017,6 +1029,8 @@ public class CrawlerImpl {
 					// System.out.println("NullNull");
 					// }
 
+					PropertyDomainRangeDecl pdrd = new PropertyDomainRangeDecl(propURI, domURI, ranURI, null, 0, 0, 0,
+							false, false);
 					if (!propDomRanDeclList.contains(pdrd)) {
 						propDomRanDeclList.add(pdrd);
 					} else {
@@ -1039,7 +1053,7 @@ public class CrawlerImpl {
 				// .append("SELECT ?d ?r (count(?i) AS ?numTriples)
 				// (count(DISTINCT ?i) AS ?numDomIns) (count(DISTINCT ?o) AS
 				// ?numRanIns)\n");
-				queryBuffer.append("SELECT DISTINCT ?d \n");
+				queryBuffer.append("SELECT DISTINCT ?d (datatype(?o) AS ?ldt)\n");
 
 				if (graphURIs != null && graphURIs.length != 0) {
 					for (URI graphURI : graphURIs) {
@@ -1106,19 +1120,43 @@ public class CrawlerImpl {
 					for (; results.hasNext();) {
 						QuerySolution sol = results.next();
 						Resource dom = sol.getResource("d");
-						String domURI = null;
-						if (dom != null) {
-							domURI = dom.getURI();
+						String litStr = null;
+						try {
+							Literal lit = sol.getLiteral("ldt");
+							if (lit != null) {
+								litStr = lit.getString();
+							}
+						} catch (Exception ex) {
+							Resource litRes = sol.getResource("ldt");
+							if (litRes != null) {
+								litStr = litRes.getURI();
+							}
 						}
-						PropertyDomainRangeDecl pdrd = new PropertyDomainRangeDecl(propURI, domURI, null,
-								URICollection.RESOURCE_RDFS_LITERAL, 0, 0, 0, false, false);
-						literalFlag = true;
-						if (!propDomRanDeclList.contains(pdrd)) {
-							propDomRanDeclList.add(pdrd);
-						} else {
-							System.err.println("ERROR: duplicate PDRD found! (L1259)");
-							System.out.println(pdrd.getDomainClass() + "-----" + pdrd.getRangeClass() + ","
-									+ pdrd.getLiteralDataType());
+						if (litStr != null) {
+							String ranRef = litStr;
+							literalDatatypeSet.add(ranRef);
+							// System.out.println(ranRef);
+
+							String domURI = null;
+							if (dom != null) {
+								domURI = dom.getURI();
+							}
+							// String ranURI = null;
+							// if (ran != null) {
+							// ranURI = ran.getURI();
+							// }
+
+							// System.out.println(domURI + "--" + ranURI);
+
+							PropertyDomainRangeDecl pdrd = new PropertyDomainRangeDecl(propURI, domURI, null, ranRef, 0,
+									0, 0, false, false);
+							if (!propDomRanDeclList.contains(pdrd)) {
+								propDomRanDeclList.add(pdrd);
+							} else {
+								System.err.println("ERROR: duplicate PDRD found! (L1259)");
+								System.out.println(pdrd.getDomainClass() + "-----" + pdrd.getRangeClass() + ","
+										+ pdrd.getLiteralDataType());
+							}
 						}
 					}
 				}
@@ -1168,7 +1206,7 @@ public class CrawlerImpl {
 						queryBuffer.append("?o rdf:type <" + pdrd.getRangeClass() + ">.\n");
 					} else {
 						if (pdrd.getLiteralDataType() != null) {
-							queryBuffer.append("FILTER(isLiteral(?o))\n");
+							queryBuffer.append("FILTER( datatype(?o) = <" + pdrd.getLiteralDataType() + ">)\n");
 						}
 					}
 					queryBuffer.append("}}\n");
@@ -1770,55 +1808,57 @@ public class CrawlerImpl {
 				if (numTriples == 0) {
 					propCategory = 4;
 				} else {
-					// category 1
-					if (domClassSet.size() != 0 && (ranClassSet.size() != 0 || literalFlag)) {
+					//  category 1
+					if (domClassSet.size() != 0 && (ranClassSet.size() != 0 || datatypeSet.size() != 0  ) ) {
 						propCategory = 1;
-					} else {
+					}else {
 						// category 2
-						if (numTriples == numTriplesWithBothClass) {
+						if( numTriples == numTriplesWithBothClass) {
 							propCategory = 2;
-						} else {
-							if (numTriplesWithBothClass != 0) {
+						}else {
+							if( numTriplesWithBothClass != 0 ) {
 								propCategory = 3;
-							} else {
+							}else {
 								propCategory = 4;
 							}
 						}
 					}
 				}
 
-				switch (wholePropertyCategory) {
+				
+				switch(wholePropertyCategory ) {
 				case 0:
 					wholePropertyCategory = propCategory;
 					break;
 				case 1:
-					if (propCategory == 4) {
+					if( propCategory == 4 ) {
 						wholePropertyCategory = 3;
-					} else {
+					}else {
 						wholePropertyCategory = propCategory;
 					}
 					break;
 				case 2:
-					if (propCategory > 2) {
+					if( propCategory > 2 ) {
 						wholePropertyCategory = 3;
 					}
 					break;
 				case 3:
 					break;
 				case 4:
-					if (propCategory < 4) {
+					if( propCategory < 4 ) {
 						wholePropertyCategory = 3;
 					}
 					break;
 				}
-
+				
+						
 				countProperties[propCategory - 1]++;
 				countAllTriples[propCategory - 1] += numTriples;
 				countClassTriples[propCategory - 1] += numTriplesWithBothClass;
 
 				// write to model
 				Resource propPartRes = model.createResource(AnonId.create());
-
+	
 				datasetRes.addProperty(propertyPartitionPro, propPartRes);
 				// property
 				Property pro = model.createProperty(propURI.toString());
@@ -1848,7 +1888,8 @@ public class CrawlerImpl {
 						classURISet.add(new URI(pdrd.getRangeClass()));
 					} else {
 						if (pdrd.getLiteralDataType() != null) {
-							classRelation.addProperty(objectClsPro, literalCls);
+							classRelation.addProperty(objectDatatypePro,
+									model.createResource(pdrd.getLiteralDataType()));
 						}
 					}
 
@@ -1944,15 +1985,23 @@ public class CrawlerImpl {
 			}
 		}
 
+		System.out.println("#Datatypes: " + datatypeSet.size());
 		System.out.println("#Classes: " + classURISet.size());
 		System.out.println("#Triples: " + totalNumTriples);
 
 		datasetRes.addLiteral(triplesPro, totalNumTriples);
 		datasetRes.addLiteral(classesPro, classURISet.size());
 		datasetRes.addLiteral(propertiesPro, proLen);
+		datasetRes.addLiteral(datatypesPro, datatypeSet.size());
+
+		Resource datasetClsRes = model.createResource(URICollection.RESOURCE_RDFS_DATATYPE);
+		for (String datatype : datatypeSet) {
+			Resource datatypeRes = model.createResource(datatype);
+			datatypeRes.addProperty(typePro, datasetClsRes);
+		}
 
 		return new Schema(model, datasetRes, wholePropertyCategory, countProperties, 0, 0, totalNumTriples, classURISet,
-				null);
+				datatypeSet);
 	}
 
 	class PropertyDomainRangeDecl {
@@ -2068,11 +2117,11 @@ public class CrawlerImpl {
 
 	}
 
-	public CrawlerImpl(URI endpointURI) {
+	public CrawlerImpl_datatype(URI endpointURI) {
 		this.endpointURI = endpointURI;
 	}
 
-	public CrawlerImpl(URI endpointURI, String crawlName, String outDirName) throws Exception {
+	public CrawlerImpl_datatype(URI endpointURI, String crawlName, String outDirName) throws Exception {
 		this.endpointURI = endpointURI;
 		this.crawlName = crawlName;
 		this.outDir = new File(outDirName);
@@ -2089,7 +2138,7 @@ public class CrawlerImpl {
 		}
 	}
 
-	public CrawlerImpl(URI endpointURI, URI[] graphURIs) {
+	public CrawlerImpl_datatype(URI endpointURI, URI[] graphURIs) {
 		this.endpointURI = endpointURI;
 		this.graphURIs = graphURIs;
 	}
@@ -2345,13 +2394,14 @@ public class CrawlerImpl {
 		return resultClassSet.toArray(new URI[0]);
 	}
 
-	private HashSet<URI> removeDatatypes(HashSet<URI> classSet) throws Exception {
-		if (classSet == null) {
+	
+	private HashSet<URI> removeDatatypes(HashSet<URI> classSet) throws Exception{
+		if( classSet == null ) {
 			return null;
 		}
 		StringBuffer queryBuffer = null;
 		HashSet<URI> resultSet = new HashSet<URI>();
-		for (URI uri : classSet) {
+		for(URI uri: classSet) {
 			// ASK
 			queryBuffer = new StringBuffer();
 			queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
@@ -2375,9 +2425,9 @@ public class CrawlerImpl {
 			String queryString = queryBuffer.toString();
 
 			Query query = null;
-			try {
+			try{
 				query = QueryFactory.create(queryString);
-			} catch (Exception ex) {
+			}catch(Exception ex) {
 				System.out.println(queryString);
 				ex.printStackTrace();
 				throw ex;
@@ -2390,23 +2440,25 @@ public class CrawlerImpl {
 				qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
 				endpointAccessCount++;
 				interval();
-				bResult = qexec.execAsk();
+				bResult  = qexec.execAsk();
 				// long end = System.currentTimeMillis();
 				// System.out.println("EXEC TIME: " + (end - start));
 			} catch (Exception ex) {
-				System.out.println(queryString);
-				ex.printStackTrace();
+					System.out.println(queryString);
+					ex.printStackTrace();
 			}
 			qexec.close();
-			if (!bResult) {
+			if( !bResult ) {
 				resultSet.add(uri);
 			}
-			System.out.print(".");
+System.out.print(".");
 		}
 		System.out.print("\n");
 
 		return resultSet;
 	}
+	
+	
 
 	public URI[] getRDFProperties() throws Exception {
 		return getRDFProperties(graphURIs);
@@ -2497,6 +2549,108 @@ public class CrawlerImpl {
 		qexec.close();
 		URI[] resultStringArray = resultList.toArray(new URI[0]);
 		return resultStringArray;
+	}
+
+	public String[] getDatatypes(URI[] propertyURIs) throws Exception {
+		HashSet<String> datatypes = new HashSet<String>();
+
+		boolean errorFlag = false;
+		if (propertyURIs != null) {
+			String stepName = "getDatatypes";
+			for (URI propertyURI : propertyURIs) {
+				String target = propertyURI.toString();
+				boolean targetErrorFlag = false;
+
+				// QUERY
+				// ---------------------------------------------------------------------------------
+				// obtains all datatypes associated with the given properties
+				// Note: virtuoso has bugs and cannot handle datatypes
+				// correctly.
+				// ---------------------------------------------------------------------------------------
+				StringBuffer queryBuffer = new StringBuffer();
+				queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
+				queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
+				queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
+				queryBuffer.append("SELECT DISTINCT (datatype(?o) AS ?ldt) \n");
+				if (graphURIs != null && graphURIs.length != 0) {
+					for (URI graphURI : graphURIs) {
+						queryBuffer.append("FROM <");
+						queryBuffer.append(graphURI.toString());
+						queryBuffer.append(">\n");
+					}
+				}
+				queryBuffer.append("WHERE{\n");
+				queryBuffer.append(" [] <");
+				queryBuffer.append(propertyURI);
+				queryBuffer.append("> ?o.\n  FILTER(isLiteral(?o))\n");
+				queryBuffer.append("}");
+				String queryString = queryBuffer.toString();
+
+				// System.out.println(queryString);
+
+				Query query = QueryFactory.create(queryString);
+
+				QueryExecution qexec = null;
+				ResultSet results = null;
+				String[] recoveredStringArray = null;
+
+				int sCount = 3;
+				while (sCount > 0) {
+					try {
+						// long start = System.currentTimeMillis();
+						qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
+						endpointAccessCount++;
+						qexec.setTimeout(-1);
+						interval();
+						results = qexec.execSelect();
+						break;
+					} catch (Exception ex) {
+						sCount--;
+						if (sCount == 0) {
+							ex.printStackTrace();
+							System.out.println(queryString);
+						} else {
+							interval_error();
+						}
+					}
+				}
+
+				if (!targetErrorFlag) {
+					if (recoveredStringArray != null) {
+						String[] filterStrs = URICollection.FILTER_CLASS;
+						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
+						for (String litURI : recoveredStringArray) {
+							if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
+								datatypes.add(litURI);
+							}
+						}
+					} else {
+						String[] filterStrs = URICollection.FILTER_CLASS;
+						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
+						ArrayList<String> targetDataTypes = new ArrayList<String>();
+						for (; results.hasNext();) {
+							QuerySolution sol = results.next();
+							Resource lit = sol.getResource("ldt");
+							if (lit != null) {
+								String litURI = lit.getURI();
+								if (litURI != null) {
+									targetDataTypes.add(litURI);
+									if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
+										datatypes.add(litURI);
+									}
+								}
+							}
+						}
+					}
+				}
+				qexec.close();
+			}
+		}
+		if (!errorFlag) {
+			String[] resultStringArray = datatypes.toArray(new String[0]);
+			return resultStringArray;
+		}
+		throw new Exception();
 	}
 
 	public String uriFilter(String uriStr, String[] filterStrs) throws Exception {

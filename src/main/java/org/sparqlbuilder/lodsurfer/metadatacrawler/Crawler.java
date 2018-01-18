@@ -31,7 +31,7 @@ public interface Crawler {
 	public URI[] getDeclaredRDFsClasses() throws Exception;
 //	public String[] getInferedRDFsClassesFromInstances() throws Exception;
 	public URI[] getRDFProperties(URI[] graphURIs) throws Exception;
-	public String[] getDatatypes(URI[] propertyURIs) throws Exception;
+//	public String[] getDatatypes(URI[] propertyURIs) throws Exception;
 
 
 }
