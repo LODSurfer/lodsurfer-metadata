@@ -24,6 +24,7 @@ import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.Property;
 import org.apache.jena.rdf.model.Resource;
 
+
 public class CrawlerImpl {
 
 	long INTERVAL = 500L;
@@ -40,7 +41,7 @@ public class CrawlerImpl {
 	public static void main(String[] args) throws Exception {
 
 		System.out.println("  Version: " + version);
-
+		
 		if (args.length == 2 && args[0].equals("-g")) {
 			String endPURIStr = args[1];
 			URI endPURI = new URI(endPURIStr);
@@ -358,21 +359,48 @@ public class CrawlerImpl {
 		// res1 = res1Set.toArray(new String[0]);
 		// }
 
+		// obtains a list of properties
 		System.out.println("\nproperties");
 		for (URI uri : res1) {
 			System.out.println(uri);
 		}
 		System.out.println();
 
-		URI[] res3 = null;
 
+		// obtains datatypeSet: this is used to filter classes.
+		String[] datatypes = null;
 		try {
-			res3 = getDeclaredRDFsClasses();
+			datatypes = getDatatypes(res1);
+		}catch(Exception ex){
+			ex.printStackTrace();
+			datatypes = null;
+		}
+		
+		// obtains a list of classes
+		URI[] res3 = null;
+		try {
+			res3 = getDeclaredRDFsClasses(datatypes == null);
 		} catch (Exception ex) {
 			// TODO
 			// throw ex;
 		}
 
+		if( datatypes == null ) {
+			
+			HashSet<String> datatypeSet = new HashSet<String>();
+			for (String datatype : datatypes) {
+				datatypeSet.add(datatype);
+			}
+			ArrayList<URI> tmpStrList = new ArrayList<URI>();
+			for (URI uri : res3) {
+				if (!datatypeSet.contains(uri)) {
+					tmpStrList.add(uri);
+				}
+			}
+			res3 = tmpStrList.toArray(new URI[0]);
+		}
+		
+		
 		System.out.println("classes");
 		for (URI uri : res3) {
 			System.out.println(uri);
@@ -2246,7 +2274,7 @@ public class CrawlerImpl {
 	}
 
 	// heavy
-	public URI[] getDeclaredRDFsClasses() throws Exception {
+	public URI[] getDeclaredRDFsClasses(boolean filterFlag) throws Exception {
 
 		String[] filterStrs = URICollection.FILTER_CLASS;
 		String[] unfilterStrs = null;
@@ -2341,7 +2369,9 @@ public class CrawlerImpl {
 				}
 			}
 		}
-		resultClassSet = removeDatatypes(resultClassSet);
+		if( filterFlag ) {
+			resultClassSet = removeDatatypes(resultClassSet);
+		}
 		return resultClassSet.toArray(new URI[0]);
 	}
 
@@ -2499,6 +2529,117 @@ public class CrawlerImpl {
 		return resultStringArray;
 	}
 
+
+	public String[] getDatatypes(URI[] propertyURIs) throws Exception {
+		HashSet<String> datatypes = new HashSet<String>();
+
+		boolean errorFlag = false;
+		if (propertyURIs != null) {
+			String stepName = "getDatatypes";
+			for (URI propertyURI : propertyURIs) {
+				String target = propertyURI.toString();
+				boolean targetErrorFlag = false;
+
+				// QUERY
+				// ---------------------------------------------------------------------------------
+				// obtains all datatypes associated with the given properties
+				// Note: virtuoso has bugs and cannot handle datatypes
+				// correctly.
+				// ---------------------------------------------------------------------------------------
+				StringBuffer queryBuffer = new StringBuffer();
+				queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
+				queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
+				queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
+				queryBuffer.append("SELECT DISTINCT (datatype(?o) AS ?ldt) \n");
+				if (graphURIs != null && graphURIs.length != 0) {
+					for (URI graphURI : graphURIs) {
+						queryBuffer.append("FROM <");
+						queryBuffer.append(graphURI.toString());
+						queryBuffer.append(">\n");
+					}
+				}
+				// if (graphURIs != null && graphURIs.length != 0) {
+				// for (String graphURI : graphURIs) {
+				// queryBuffer.append("FROM <");
+				// queryBuffer.append(graphURI);
+				// queryBuffer.append(">\n");
+				// }
+				// }
+				queryBuffer.append("WHERE{\n");
+				queryBuffer.append(" [] <");
+				queryBuffer.append(propertyURI);
+				queryBuffer.append("> ?o.\n  FILTER(isLiteral(?o))\n");
+				queryBuffer.append("}");
+				String queryString = queryBuffer.toString();
+
+				// System.out.println(queryString);
+
+				Query query = QueryFactory.create(queryString);
+
+				QueryExecution qexec = null;
+				ResultSet results = null;
+				String[] recoveredStringArray = null;
+
+				int sCount = 3;
+				while (sCount > 0) {
+					try {
+						// long start = System.currentTimeMillis();
+						qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
+						endpointAccessCount++;
+						qexec.setTimeout(-1);
+						interval();
+						results = qexec.execSelect();
+						break;
+					} catch (Exception ex) {
+						sCount--;
+						if (sCount == 0) {
+							ex.printStackTrace();
+							System.out.println(queryString);
+						} else {
+							interval_error();
+						}
+					}
+				}
+
+				if (!targetErrorFlag) {
+					if (recoveredStringArray != null) {
+						String[] filterStrs = URICollection.FILTER_CLASS;
+						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
+						for (String litURI : recoveredStringArray) {
+							if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
+								datatypes.add(litURI);
+							}
+						}
+					} else {
+						String[] filterStrs = URICollection.FILTER_CLASS;
+						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
+						ArrayList<String> targetDataTypes = new ArrayList<String>();
+						for (; results.hasNext();) {
+							QuerySolution sol = results.next();
+							Resource lit = sol.getResource("ldt");
+							if (lit != null) {
+								String litURI = lit.getURI();
+								if (litURI != null) {
+									targetDataTypes.add(litURI);
+									if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
+										datatypes.add(litURI);
+									}
+								}
+							}
+						}
+					}
+				}
+				qexec.close();
+			}
+		}
+		if (!errorFlag) {
+			String[] resultStringArray = datatypes.toArray(new String[0]);
+			return resultStringArray;
+		}
+		throw new Exception();
+	}
+
+	
 	public String uriFilter(String uriStr, String[] filterStrs) throws Exception {
 		if (filterStrs == null || filterStrs.length == 0) {
 			return uriStr;
