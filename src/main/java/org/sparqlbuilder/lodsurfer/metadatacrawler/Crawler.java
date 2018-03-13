@@ -18,11 +18,14 @@ public interface Crawler {
 	
 	
 	
-	public SchemaCategory determineSchemaCategory(Model model, Resource datasetResource) throws Exception;
+//	public SchemaCategory determineSchemaCategory(Model model, Resource datasetResource) throws Exception;
+	public SchemaCategory determineSchemaCategory(GraphSchema schema) throws Exception;
 
-	public Schema getClassSchema(Schema schema, URI[] classURIs) throws Exception;
+//	public GraphSchema getClassSchema(GraphSchema schema, URI[] classURIs) throws Exception;
+	public GraphSchema getClassSchema(GraphSchema schema) throws Exception;
 	
-	public Schema getPropertySchema(Model model, Resource datasetRes, URI[] propertyURIs, HashSet<String> datatypeSet) throws Exception;
+//	public GraphSchema getPropertySchema(Model model, Resource datasetRes, URI[] propertyURIs, HashSet<String> datatypeSet) throws Exception;
+	public GraphSchema getPropertySchema(GraphSchema schema) throws Exception;
 	
 
 	public Model getPropertiesFromInstanceDecls() throws Exception;

@@ -47,6 +47,7 @@ public class URICollection {
 
 
 	static public final String PROPERTY_SB_ENDPOINT_CATEGORY = "http://sparqlbuilder.org/2015/09/rdf-metadata-schema#endpointCategory";
+	static public final String PROPERTY_SB_GRAPH_CATEGORY = "http://sparqlbuilder.org/2015/09/rdf-metadata-schema#graphCategory";
 	static public final String PROPERTY_SB_CLASS_CATEGORY = "http://sparqlbuilder.org/2015/09/rdf-metadata-schema#classCategory";
 	static public final String PROPERTY_SB_PROPERTY_CATEGORY = "http://sparqlbuilder.org/2015/09/rdf-metadata-schema#propertyCategory";
 	static public final String PROPERTY_SB_CRAWL_START_TIME = "http://sparqlbuilder.org/2015/09/rdf-metadata-schema#crawlStartTime";
