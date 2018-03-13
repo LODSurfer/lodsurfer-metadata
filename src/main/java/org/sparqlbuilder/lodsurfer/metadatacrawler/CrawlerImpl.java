@@ -50,12 +50,6 @@ public class CrawlerImpl {
 
 		System.out.println("  Version: " + version);
 
-		args = new String[4];
-		args[0] = "-a3";
-		args[1] = "http://metadb.riken.jp/sparql?force=true";
-		args[2] = "SBM";
-		args[3] = "/tmp/metadb7";
-
 		if (args.length == 2 && args[0].equals("-g")) {
 			String endPURIStr = args[1];
 			URI endPURI = new URI(endPURIStr);
