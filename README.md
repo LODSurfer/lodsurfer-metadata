@@ -39,5 +39,7 @@ Development version is also available (the branch name is develop).  Please note
   4. to crawl the default graph in the endpoint and obtain level [2/3] metadata of the graph<br>
      -d2 endpointURL crawlName outputFileName <br>
      -d3 endpointURL crawlName outputFileName <br>
+     
+The data structure of LODSurfer metadata is shown [here](https://github.com/LODSurfer/lodsurfer-metadata/wiki/LOD-Surfer-Metadata-Structure).
 
 
