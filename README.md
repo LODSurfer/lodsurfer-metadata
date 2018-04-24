@@ -18,7 +18,7 @@ Metadata definition and implementaton for LOD Surfer, a data search tool for lif
 
 # development version
 
-Development version is also available (the branch name is develop).  Please note that options are different from stable bersion (main branch).
+Development version is also available (the branch name is develop).  Please note that options are different from the stable version (main branch).
 
 #Usage of the LODSurfer metadata crawler (development version)
 
