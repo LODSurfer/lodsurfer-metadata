@@ -1,10 +1,10 @@
 package org.sparqlbuilder.lodsurfer.metadatacrawler;
 
 import java.net.URI;
-import java.util.HashSet;
+//import java.util.HashSet;
 
 import org.apache.jena.rdf.model.Model;
-import org.apache.jena.rdf.model.Resource;
+//import org.apache.jena.rdf.model.Resource;
 
 
 

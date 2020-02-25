@@ -1,17 +1,12 @@
 package org.sparqlbuilder.lodsurfer.metadatacrawler;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.regex.Matcher;
@@ -28,14 +23,16 @@ import org.apache.jena.rdf.model.Literal;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.rdf.model.Property;
+import org.apache.jena.rdf.model.RDFNode;
 import org.apache.jena.rdf.model.Resource;
+import org.apache.jena.sparql.engine.http.QueryEngineHTTP;
 
 public class CrawlerImpl {
 
 	long INTERVAL = 100L;
 	long INTERVAL_ERROR = 5000L;
 
-	static String version = "20180216";
+	static String version = "20200221";
 
 	URI endpointURI = null;
 	String crawlName = null;
@@ -44,7 +41,7 @@ public class CrawlerImpl {
 	String[] graphURIFilter = URICollection.FILTER_GRAPH;
 	String userGraphURIFiler = "^http://metadb.riken.jp/structure.*|^http://metadb.riken.jp/system.*";
 
-	int metadataLayer = 3;
+	int metadataLayer = 3; // 2: simple, 3: obtains statistical data
 
 	public static void main(String[] args) throws Exception {
 
@@ -136,7 +133,8 @@ public class CrawlerImpl {
 			URI[] graphURIs = null;
 			graphURIs = impl.getGraphURIs();
 			if (graphURIs == null || graphURIs.length == 0) {
-				graphURIs = new URI[0];
+				graphURIs = new URI[1];
+				graphURIs[0] = null;
 			} else {
 				Arrays.sort(graphURIs);
 				if (!Arrays.asList(graphURIs).contains((URI) null)) {
@@ -320,7 +318,7 @@ public class CrawlerImpl {
 		} else {
 
 			EndpointSchema endpointSchema = createInitEndpointSchema(graphURIs);
-			int endpointAccessCount = 0;
+			// int endpointAccessCount = 0;
 
 			boolean errorState = false;
 
@@ -355,8 +353,6 @@ public class CrawlerImpl {
 					Date startDate = new Date();
 					long start = startDate.getTime();
 
-
-
 					GraphSchema graphSchema = endpointSchema.getGraphSchema(graphURI);
 
 					try {
@@ -366,7 +362,6 @@ public class CrawlerImpl {
 					} catch (Exception ex) {
 						ex.printStackTrace();
 						errorState = true;
-
 /*						
 						// reovery
 						bw.write(graphURI.toString());
@@ -423,20 +418,20 @@ public class CrawlerImpl {
 		}catch(Exception ex) {
 		}
 		
-		String stepName = "getGraphURIs";
+		// String stepName = "getGraphURIs";
 
 		// QUERY 1 (metadata layer 2,3)
 		// ---------------------------------------------------------------------------------
 		// obtains all graphs on the SPARQL endpoint.
 		// ---------------------------------------------------------------------------------------
 		StringBuffer queryBuffer = new StringBuffer();
-		queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
-		queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
-		queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
-		queryBuffer.append("SELECT DISTINCT ?g\n");
+		// queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
+		// queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
+		// queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
+		queryBuffer.append("SELECT ?g\n");
 		queryBuffer.append("WHERE{\n");
-		queryBuffer.append(" GRAPH ?g{ ?s ?p ?o.}\n");
-		queryBuffer.append("}");
+		queryBuffer.append(" GRAPH ?g { ?s ?p ?o.}\n");
+		queryBuffer.append("} GROUP BY ?g");
 
 		String queryString = queryBuffer.toString();
 
@@ -446,7 +441,7 @@ public class CrawlerImpl {
 
 		QueryExecution qexec = null;
 		ResultSet results = null;
-		String[] recoveryStrings = null;
+		//String[] recoveryStrings = null;
 		try {
 			// long start = System.currentTimeMillis();
 			qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
@@ -461,28 +456,29 @@ public class CrawlerImpl {
 
 		// results
 		ArrayList<URI> graphList = new ArrayList<URI>();
+		/*
 		if (recoveryStrings != null) {
 			for (String uri : recoveryStrings) {
 				if (uriFilter(uri, graphURIFilter) != null) {
 					graphList.add(new URI(uri));
 				}
 			}
-		} else {
-			ArrayList<String> forLog = new ArrayList<String>();
-			for (; results.hasNext();) {
-				QuerySolution sol = results.next();
-				// label
-				Resource graph = sol.getResource("g");
-				forLog.add(graph.getURI());
-				Matcher matcher = ptn.matcher(graph.getURI());
-				if( !matcher.find() ) {
-					if (uriFilter(graph.getURI(), graphURIFilter) != null) {
-						graphList.add(new URI(graph.getURI()));
-					}
+		*/
+		// } else {
+		ArrayList<String> forLog = new ArrayList<String>();
+		for (; results.hasNext();) {
+			QuerySolution sol = results.next();
+			// label
+			Resource graph = sol.getResource("g");
+			forLog.add(graph.getURI());
+			Matcher matcher = ptn.matcher(graph.getURI());
+			if( !matcher.find() ) {
+				if (uriFilter(graph.getURI(), graphURIFilter) != null) {
+					graphList.add(new URI(graph.getURI()));
 				}
 			}
-
 		}
+		// }
 		qexec.close();
 
 		URI[] resultList = graphList.toArray(new URI[0]);
@@ -491,10 +487,6 @@ public class CrawlerImpl {
 
 	int endpointAccessCount = 0;
 
-
-	
-	
-	
 	public GraphSchema determineSchemaCategory(GraphSchema schema) throws Exception {
 		Calendar start = GregorianCalendar.getInstance();
 		URI graphURI = schema.graphURI;
@@ -528,6 +520,7 @@ public class CrawlerImpl {
 		}
 
 		// obtains datatypeSet: this is used to filter classes.
+		// What these codes here do is the set of declared classes minus the set of obtained datatypes.
 		String[] datatypes = null;
 		// Metadata Layer 2,3
 		if (metadataLayer == 2 || metadataLayer == 3) {
@@ -549,7 +542,7 @@ public class CrawlerImpl {
 				// throw ex;
 			}
 		}
-
+		// filter out classes used for datatypes of literal values such as xsd:integer
 		if (datatypes != null) {
 			HashSet<String> datatypeSet = new HashSet<String>();
 			for (String datatype : datatypes) {
@@ -557,7 +550,7 @@ public class CrawlerImpl {
 			}
 			ArrayList<URI> tmpStrList = new ArrayList<URI>();
 			for (URI uri : res3) {
-				if (!datatypeSet.contains(uri)) {
+				if (!datatypeSet.contains(uri.toString())) {
 					tmpStrList.add(uri);
 				}
 			}
@@ -699,7 +692,6 @@ public class CrawlerImpl {
 		return schema;
 	}
 
-
 	private void writeLogTriples(Model model, Resource datasetResource, Calendar start, Calendar end, int endpointCount) {
 				Property typePro = model.createProperty(URICollection.PROPERTY_RDF_TYPE);
 				Resource crawlLogRes = model.createResource(URICollection.RESOURCE_SB_CRAWL_LOG);
@@ -714,7 +706,7 @@ public class CrawlerImpl {
 				Property endpointAccessesPro = model.createProperty(URICollection.PROPERTY_SB_ENDPOINT_ACCESSES);
 				clBlankRes.addLiteral(endpointAccessesPro, endpointCount);
 	}
-	
+
 	public GraphSchema getClassSchema(GraphSchema schema) throws Exception {
 		// String[] filterStrs = URICollection.FILTER_CLASS;
 		// String[] unfilterStrs = URICollection.UNFILTER_CLASS;
@@ -793,7 +785,7 @@ public class CrawlerImpl {
 				System.out.print("L");
 			} catch (Exception ex) {
 				ex.printStackTrace();
-				System.out.println(queryString);
+				System.out.println("The error caused by this query:\n" + queryString);
 				throw ex;
 			}
 
@@ -820,16 +812,17 @@ public class CrawlerImpl {
 				queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 				queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
 				queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
-				queryBuffer.append("SELECT (count(DISTINCT ?i)  AS ?num) \n");
+				queryBuffer.append("SELECT (count(DISTINCT ?i) AS ?num) \n");
 				if (schema.graphURI != null) {
 					queryBuffer.append("FROM <");
 					queryBuffer.append(schema.graphURI.toString());
 					queryBuffer.append(">\n");
 				}
 				queryBuffer.append("WHERE{\n");
-				queryBuffer.append("  {?i rdf:type <" + cls.getURI() + ">.}\n");
-				queryBuffer.append(" UNION  {[] ?p ?i.  ?p rdfs:range <" + cls.getURI() + ">.}\n");
-				queryBuffer.append(" UNION  {?i ?p [].  ?p rdfs:domain <" + cls.getURI() + ">.}\n");
+				queryBuffer.append("  {?i rdf:type ?class.}\n");
+				queryBuffer.append(" UNION  {[] ?p ?i.  ?p rdfs:range ?class.}\n");
+				queryBuffer.append(" UNION  {?i ?p [].  ?p rdfs:domain ?class.}\n");
+				queryBuffer.append(" VALUES ?class {<" + cls.getURI() + ">}\n");
 				queryBuffer.append("}");
 
 				queryString = queryBuffer.toString();
@@ -856,11 +849,10 @@ public class CrawlerImpl {
 					} catch (Exception ex) {
 						sCount--;
 						if (sCount == 0) {
-							System.out.println(queryString);
+							System.out.println("The error caused by this query:\n" + queryString);
 							ex.printStackTrace();
 							// throw ex;
 						} else {
-							interval_error();
 							interval_error();
 						}
 
@@ -937,7 +929,7 @@ public class CrawlerImpl {
 		schema.classCategory = classCategory;
 		return schema;
 	}
-
+/*
 	class ResourceNumberPair {
 		public Resource resource = null;
 		public int number = 0;
@@ -947,7 +939,7 @@ public class CrawlerImpl {
 			this.number = number;
 		}
 	}
-
+*/
 	public GraphSchema getPropertySchema(GraphSchema schema)
 			throws Exception {
 		// String[] filterStrs = { "http://www.openlinksw" };
@@ -992,7 +984,7 @@ public class CrawlerImpl {
 		Property objectDatatypesPro = model.createProperty(URICollection.PROPERTY_SB_OBJECT_DATATYPES);
 
 		Property classesPro = model.createProperty(URICollection.PROPERTY_VOID_CLASSES);
-		Property datatypesPro = model.createProperty(URICollection.PROPERTY_SB_DATATYPES);
+		// Property datatypesPro = model.createProperty(URICollection.PROPERTY_SB_DATATYPES);
 
 		// Property numDomClsNumInsPro = model
 		// .createProperty(URICollection.PROPERTY_SB_NUMBER_OF_INSTANCES_OF_DOMAIN_CLASS);
@@ -1076,7 +1068,7 @@ public class CrawlerImpl {
 					// System.out.println("EXEC TIME: " + (end - start));
 					System.out.print("d");
 				} catch (Exception ex) {
-					System.out.println(queryString);
+					System.out.println("The error caused by this query:\n" + queryString);
 					ex.printStackTrace();
 					throw ex;
 				}
@@ -1125,7 +1117,7 @@ public class CrawlerImpl {
 					// System.out.println("EXEC TIME: " + (end - start));
 					System.out.print("r");
 				} catch (Exception ex) {
-					System.out.println(queryString);
+					System.out.println("The error caused by this query:\n" + queryString);
 					ex.printStackTrace();
 					throw ex;
 				}
@@ -1193,7 +1185,7 @@ public class CrawlerImpl {
 					} catch (Exception ex) {
 						sCount--;
 						if (sCount == 0) {
-							System.out.println(queryString);
+							System.out.println("The error caused by this query:\n" + queryString);
 							ex.printStackTrace();
 							throw ex;
 						} else {
@@ -1262,6 +1254,7 @@ public class CrawlerImpl {
 					queryBuffer.append(graphURI.toString());
 					queryBuffer.append(">\n");
 				}
+				queryBuffer.append("# Query 11\n");
 				queryBuffer.append("WHERE{\n");
 				queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 				queryBuffer.append("   ?i rdf:type ?d.\n");
@@ -1297,7 +1290,7 @@ public class CrawlerImpl {
 					} catch (Exception ex) {
 						sCount--;
 						if (sCount == 0) {
-							System.out.println(queryString);
+							System.out.println("The error caused by this query:\n" + queryString);
 							// TODO
 							// ---------------------------------------------------------
 							// Virtuoso
@@ -1370,9 +1363,10 @@ public class CrawlerImpl {
 							queryBuffer.append(graphURI.toString());
 							queryBuffer.append(">\n");
 						}
+						queryBuffer.append("# Query 12\n");
 						queryBuffer.append("WHERE{\n");
 
-						queryBuffer.append("{SELECT DISTINCT ?i ?o WHERE{\n");
+						queryBuffer.append("{SELECT ?i ?o WHERE{\n");
 						queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 						if (pdrd.getDomainClass() != null) {
 							queryBuffer.append(" ?i rdf:type <" + pdrd.getDomainClass() + ">.\n");
@@ -1387,7 +1381,7 @@ public class CrawlerImpl {
 						queryBuffer.append("}}\n");
 						queryBuffer.append("}");
 						queryString = queryBuffer.toString();
-						// System.out.println(queryString);
+						System.out.println(queryString);
 
 						qexec = null;
 						results = null;
@@ -1409,7 +1403,7 @@ public class CrawlerImpl {
 							} catch (Exception ex) {
 								sCount--;
 								if (sCount == 0) {
-									System.out.println(queryString);
+									System.out.println("The error caused by this query:\n" + queryString);
 									// TODO
 									// ---------------------------------------------------------
 									// Virtuoso
@@ -1420,7 +1414,6 @@ public class CrawlerImpl {
 									throw ex;
 									// virtuosoErrorFlag = true;
 								} else {
-									interval_error();
 									interval_error();
 								}
 							}
@@ -1518,26 +1511,34 @@ public class CrawlerImpl {
 				int numDomIns = 0;
 				int numRanIns = 0;
 				int numTriples = 0;
+				int numTriplesWithDomClass = 0;
+				int numTriplesWithRanClass = 0;
+				int numTriplesWithBothClass = 0;
 				// numbers of triples, dom instances and ran instances
 				// Metadata Layer 3
 				if (metadataLayer == 3) {
+					System.out.println("Query 12 p1");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
 					queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
 					queryBuffer.append(
-							"SELECT (count(?i) AS ?numTriples) (count(DISTINCT ?i) AS ?numDomIns) (count(DISTINCT ?o) AS ?numRanIns) \n");
-
+							"SELECT (count(?i) AS ?numTriples) (count(DISTINCT ?i) AS ?numDomIns) (count(DISTINCT ?o) AS ?numRanIns)");
+					queryBuffer.append(" (count(?d) AS ?numTriplesWithDom) (count(?r) AS ?numTriplesWithRan) (count(?lo) AS ?numTriplesWithRanL)\n");
 					if (graphURI != null ) {
 						queryBuffer.append("FROM <");
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
+					queryBuffer.append("# Query 12 p1\n");
 					queryBuffer.append("WHERE{\n");
-					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
+					queryBuffer.append("   ?i <" + propURI + "> ?o.\n");
+					queryBuffer.append("   OPTIONAL { ?i rdf:type ?d. }\n");
+					queryBuffer.append("   OPTIONAL { ?o rdf:type ?r. }\n");
+					queryBuffer.append("   OPTIONAL { FILTER isLiteral(?o) BIND(?o AS ?lo) }\n");
 					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 					query = QueryFactory.create(queryString);
 
 					qexec = null;
@@ -1552,7 +1553,7 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("n");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
@@ -1570,6 +1571,22 @@ public class CrawlerImpl {
 						if (lit != null) {
 							numTriples = lit.getInt();
 						}
+//						lit = sol.getLiteral("numDomInsWithDom");
+//						if (lit != null) {
+//							numDomInsWithClass = lit.getInt();
+//						}
+						lit = sol.getLiteral("numTriplesWithDom");
+						if (lit != null) {
+							numTriplesWithDomClass = lit.getInt();
+						}
+						lit = sol.getLiteral("numTriplesWithRan");
+						if (lit != null) {
+							numTriplesWithRanClass = lit.getInt();
+						}
+						lit = sol.getLiteral("numTriplesWithRanL");
+						if (lit != null) {
+							numTriplesWithRanClass += lit.getInt();
+						}
 						// System.out.println("NumTriples: " + numTriples + ",
 						// numDomIns: " + numDomIns + ", numRanIns: " + numRanIns);
 
@@ -1578,21 +1595,19 @@ public class CrawlerImpl {
 
 				}
 
-				int numTriplesWithBothClass = 0;
-				int numDomInsWithClass = 0;
-				int numTriplesWithDomClass = 0;
-				int numRanInsWithClass = 0;
-				int numTriplesWithRanClass = 0;
+//				int numTriplesWithBothClass = 0;
+//				int numDomInsWithClass = 0;
+//				int numTriplesWithDomClass = 0;
+//				int numRanInsWithClass = 0;
+//				int numTriplesWithRanClass = 0;
 
-				// if (domClassSet.size() == 0 || (ranClassSet.size() == 0 &&
-				// literalDatatypeSet.size() == 0) ) {
-
-				// �ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽN�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽX�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｾ郢ｧ�ｿｽ�ｿｽ�ｽｽ謇假ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｾ�ｿｽ�ｽｿ�ｽｽ驛｢�ｽｧ隰�蛛�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽC�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽX�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ^�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽX�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｾ隴ｴ�ｽｧ髢ｻ�ｽｸ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｨ貅ｷ�ｿｽ驤ｴ�ｿｽ�ｽｷ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｽ
 				// QUERY
 				// ---------------------------------------------------------------------------------
 				// ---------------------------------------------------------------------------------------
 				// Metadata Layer 3
 				if (metadataLayer == 3) {
+					/*
+					System.out.println("Query 12 p2");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1604,13 +1619,13 @@ public class CrawlerImpl {
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
-					queryBuffer.append("WHERE {\n { SELECT DISTINCT ?i ?o \n");
+					queryBuffer.append("# Query 12 p2\n");
 					queryBuffer.append("WHERE{\n");
 					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 					queryBuffer.append("   ?i rdf:type ?d. \n");
-					queryBuffer.append("} }\n}");
+					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 
 					qexec = null;
 					results = null;
@@ -1625,7 +1640,7 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("t");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
@@ -1633,7 +1648,7 @@ public class CrawlerImpl {
 						QuerySolution sol = results.next();
 						Literal lit = sol.getLiteral("numDomIns");
 						if (lit != null) {
-							numDomInsWithClass = lit.getInt();
+//							numDomInsWithClass = lit.getInt();
 						}
 						lit = sol.getLiteral("numTriplesWithDom");
 						if (lit != null) {
@@ -1641,11 +1656,14 @@ public class CrawlerImpl {
 						}
 					}
 					qexec.close();
+					*/
 
 					// range
 					// QUERY
 					// ---------------------------------------------------------------------------------
 					// ---------------------------------------------------------------------------------------
+					/*
+					System.out.println("Query 12 p3");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1658,14 +1676,14 @@ public class CrawlerImpl {
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
-					queryBuffer.append("WHERE {\n { SELECT DISTINCT ?i ?o \n");
+					queryBuffer.append("# Query 12 p3\n");
 					queryBuffer.append("WHERE{\n");
 					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 					queryBuffer.append("   ?o rdf:type ?r. \n");
 					// queryBuffer.append("UNION{ FILTER(isLiteral(?o)) }\n");
-					queryBuffer.append("} }\n }");
+					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 					query = QueryFactory.create(queryString);
 
 					qexec = null;
@@ -1680,28 +1698,31 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("r");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
 					if (results.hasNext()) {
 						QuerySolution sol = results.next();
-						Literal lit = sol.getLiteral("numRanIns");
-						if (lit != null) {
-							numRanInsWithClass = lit.getInt();
-						}
-						lit = sol.getLiteral("numTriplesWithRan");
+//						Literal lit = sol.getLiteral("numRanIns");
+//						if (lit != null) {
+//							numRanInsWithClass = lit.getInt();
+//						}
+						Literal lit = sol.getLiteral("numTriplesWithRan");
 						if (lit != null) {
 							numTriplesWithRanClass = lit.getInt();
 						}
 
 					}
 					qexec.close();
+					*/
 
 					// literal
 					// QUERY
 					// ---------------------------------------------------------------------------------
 					// ---------------------------------------------------------------------------------------
+					/*
+					System.out.println("Query 12 p4");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1714,13 +1735,13 @@ public class CrawlerImpl {
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
-					queryBuffer.append("WHERE{\n { SELECT DISTINCT ?i ?o \n");
+					queryBuffer.append("# Query 12 p4\n");
 					queryBuffer.append("WHERE{\n");
 					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 					queryBuffer.append(" FILTER(isLiteral(?o)) \n");
-					queryBuffer.append("} } \n }");
+					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 					query = QueryFactory.create(queryString);
 
 					qexec = null;
@@ -1735,23 +1756,24 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("l");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
 					if (results.hasNext()) {
 						QuerySolution sol = results.next();
-						Literal lit = sol.getLiteral("numRanIns");
-						if (lit != null) {
-							numRanInsWithClass += lit.getInt();
-						}
-						lit = sol.getLiteral("numTriplesWithRan");
+//						Literal lit = sol.getLiteral("numRanIns");
+//						if (lit != null) {
+//							numRanInsWithClass += lit.getInt();
+//						}
+						Literal lit = sol.getLiteral("numTriplesWithRan");
 						if (lit != null) {
 							numTriplesWithRanClass += lit.getInt();
 						}
 
 					}
 					qexec.close();
+					*/
 
 					// // literal
 					// queryBuffer = new StringBuffer();
@@ -1805,9 +1827,10 @@ public class CrawlerImpl {
 					// qexec.close();
 
 					// domain,
-					// range鬮｣蛹��ｽｽ�ｽｳ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽ｡鬮ｫ�ｽｴ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ鬮ｯ讖ｸ�ｽｽ�ｽｳ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽ｣鬯ｮ�ｽｫ�ｿｽ�ｽｽ�ｽｪ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｼ�ｿｽ�ｽｿ�ｽｽ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ髯溷供�ｽｨ�ｽｯ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｻ鬩搾ｽｵ�ｿｽ�ｽｽ�ｽｺ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ霑｢證ｦ�ｽｽ�ｽｹ隴主�玲ｨ滂ｿｽ�ｽｾ蜿悶渚�ｿｽ�ｽｽ�ｽｹ隴惹ｸ橸ｽｹ�ｽｲ�ｿｽ�ｽｾ蜿門�ｵ�ｿｽ�ｽｽ�ｽｬ�ｿｽ�ｽｽ�ｽｨ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｰ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ髯ｷ�ｽｻ髢ｧ�ｽｲ�ｿｽ�ｽｿ�ｽｽ陞溘ｑ�ｽｽ�ｽｸ�ｿｽ�ｽｽ�ｽｺ髯具ｽｹ�ｿｽ�ｽｽ�ｽｻ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ
+					// rang
 					// QUERY
 					// ---------------------------------------------------------------------------------
+					System.out.println("Query 12 p5");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1818,7 +1841,7 @@ public class CrawlerImpl {
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
-					queryBuffer.append("WHERE {\n { SELECT DISTINCT ?i ?o\n");
+					queryBuffer.append("# Query 12 p5\n");
 					queryBuffer.append("WHERE{\n");
 					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 					// if (domClassSet.size() == 0) {
@@ -1829,9 +1852,9 @@ public class CrawlerImpl {
 					// queryBuffer.append("FILTER( isLiteral(?o) ) \n");
 					// }
 
-					queryBuffer.append("} } \n }");
+					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 					query = QueryFactory.create(queryString);
 
 					qexec = null;
@@ -1846,7 +1869,7 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("m");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
@@ -1861,6 +1884,7 @@ public class CrawlerImpl {
 
 					// QUERY
 					// ---------------------------------------------------------------------------------
+					System.out.println("Query 12 p6");
 					queryBuffer = new StringBuffer();
 					queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 					queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1871,7 +1895,7 @@ public class CrawlerImpl {
 						queryBuffer.append(graphURI.toString());
 						queryBuffer.append(">\n");
 					}
-					queryBuffer.append("WHERE {\n  { SELECT DISTINCT ?i ?o\n");
+					queryBuffer.append("# Query 12 p6\n");
 					queryBuffer.append("WHERE{\n");
 					queryBuffer.append("   ?i <" + propURI + "> ?o. \n");
 					// if (domClassSet.size() == 0) {
@@ -1879,12 +1903,12 @@ public class CrawlerImpl {
 					// }
 					// if (ranClassSet.size() == 0) {
 					// queryBuffer.append(" ?o rdf:type ?r. \n");
-					queryBuffer.append("FILTER( isLiteral(?o) ) \n");
+					queryBuffer.append("   FILTER( isLiteral(?o) ) \n");
 					// }
 
-					queryBuffer.append("} } \n }");
+					queryBuffer.append("}");
 					queryString = queryBuffer.toString();
-					// System.out.println(queryString);
+					System.out.println(queryString);
 					query = QueryFactory.create(queryString);
 
 					qexec = null;
@@ -1899,7 +1923,7 @@ public class CrawlerImpl {
 						// System.out.println("EXEC TIME: " + (end - start));
 						System.out.print("d");
 					} catch (Exception ex) {
-						System.out.println(queryString);
+						System.out.println("The error caused by this query:\n" + queryString);
 						ex.printStackTrace();
 						throw ex;
 					}
@@ -1930,6 +1954,7 @@ public class CrawlerImpl {
 				ArrayList<String> labelList = new ArrayList<String>();
 				// QUERY
 				// ---------------------------------------------------------------------------------
+				System.out.println("Query 12 p7");
 				queryBuffer = new StringBuffer();
 				queryBuffer.append("PREFIX owl: <" + URICollection.PREFIX_OWL + ">\n");
 				queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
@@ -1940,11 +1965,12 @@ public class CrawlerImpl {
 					queryBuffer.append(graphURI.toString());
 					queryBuffer.append(">\n");
 				}
+				queryBuffer.append("# Query 12 p7\n");
 				queryBuffer.append("WHERE{\n");
 				queryBuffer.append("  <" + propURI + "> rdfs:label ?label. \n");
 				queryBuffer.append("}");
 				queryString = queryBuffer.toString();
-				// System.out.println(queryString);
+				System.out.println(queryString);
 				query = QueryFactory.create(queryString);
 
 				qexec = null;
@@ -1960,7 +1986,7 @@ public class CrawlerImpl {
 					// System.out.print(".");
 					System.out.print("L");
 				} catch (Exception ex) {
-					System.out.println(queryString);
+					System.out.println("The error caused by this query:\n" + queryString);
 					ex.printStackTrace();
 					throw ex;
 				}
@@ -2051,12 +2077,12 @@ public class CrawlerImpl {
 					classRelation.addProperty(typePro, classRelationCls);
 					propPartRes.addProperty(classRelationPro, classRelation);
 
-					// 鬮｣蛹��ｽｽ�ｽｳ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｻ鬯ｮ�ｽｫ�ｿｽ�ｽｽ�ｽｱ髫ｶ謚ｵ�ｽｽ�ｽｭ驍ｵ�ｽｺ鬩｢謳ｾ�ｽｽ�ｽｹ隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｩ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ
+					//
 					classRelation.addProperty(subjectClsPro, model.createResource(pdrd.getDomainClass()));
 
 					classURISet.add(new URI(pdrd.getDomainClass()));
 
-					// 鬯ｨ�ｽｾ�ｿｽ�ｽｽ�ｽｶ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｮ鬯ｨ�ｽｾ�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｪ髫ｶ謚ｵ�ｽｽ�ｽｭ驍ｵ�ｽｺ鬩｢謳ｾ�ｽｽ�ｽｹ隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｩ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ/鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｻ鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ驛｢譎｢�ｽｽ�ｽｨ
+					//
 					if (pdrd.getRangeClass() != null) {
 						classRelation.addProperty(objectClsPro, model.createResource(pdrd.getRangeClass()));
 						classURISet.add(new URI(pdrd.getRangeClass()));
@@ -2070,16 +2096,16 @@ public class CrawlerImpl {
 					// model.createProperty(pdrd.getProperty()));
 
 					if (metadataLayer == 3) {
-						// 鬮ｯ�ｽｷ髣鯉ｽｨ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｨ鬩幢ｽ｢隴主�玲ｨ滂ｿｽ�ｽｾ蜿悶渚�ｿｽ�ｽｽ�ｽｹ隴惹ｸ橸ｽｹ�ｽｲ�ｿｽ�ｽｾ蜿門�ｵ�ｿｽ�ｽｽ�ｽｬ�ｿｽ�ｽｽ�ｽｨ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｰ
+						//
 						classRelation.addLiteral(triplesPro, pdrd.getNumTriples());
-						// 鬮｣蛹��ｽｽ�ｽｳ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｻ鬯ｮ�ｽｫ�ｿｽ�ｽｽ�ｽｱ髫ｶ謚ｵ�ｽｽ�ｽｭ驍ｵ�ｽｺ�ｿｽ�ｽｿ�ｽｽ鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｳ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｳ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ鬮ｫ�ｽｰ�ｿｽ�ｽｽ�ｽｨ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｰ
+						//
 						classRelation.addLiteral(distinctSubjectsPro, pdrd.getNumDomainInstances());
-						// 鬯ｨ�ｽｾ�ｿｽ�ｽｽ�ｽｶ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｮ鬯ｨ�ｽｾ�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｪ髫ｶ謚ｵ�ｽｽ�ｽｭ驍ｵ�ｽｺ�ｿｽ�ｽｿ�ｽｽ鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｳ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｳ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｹ鬮ｫ�ｽｰ�ｿｽ�ｽｽ�ｽｨ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｰ
+						//
 						classRelation.addLiteral(distinctObjectsPro, pdrd.getNumRangeInstances());
 					}
 
 					// TODO
-					// 鬮ｮ雜｣�ｽｽ�ｽｸ髯具ｽｹ�ｿｽ�ｽｽ�ｽｻ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｼ�ｿｽ�ｽｿ�ｽｽ鬩搾ｽｵ�ｿｽ�ｽｽ�ｽｺ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｦ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ髯具ｽｹ�ｿｽ�ｽｽ�ｽｻ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｼ隶捺慣�ｽｽ�ｽｸ�ｿｽ�ｽｽ�ｽｺ髴托ｽ｢隴会ｽｦ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽ｢�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｺ鬯ｮ�ｽｫ�ｿｽ�ｽｽ�ｽｱ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ
+					//
 					// classRelation.addLiteral(isDomClsLimPro,
 					// pdrd.isDomainClassLimitedQ());
 					// classRelation.addLiteral(isRanClsLimPro,
@@ -2110,7 +2136,7 @@ public class CrawlerImpl {
 				}
 
 				// TODO literal
-				// 鬩幢ｽ｢隴趣ｽ｢�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｿ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽ､鬩幢ｽ｢隴惹ｸ橸ｽｹ�ｽｲ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ雎趣ｿｽange鬩搾ｽｵ�ｿｽ�ｽｽ�ｽｺ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｨ鬩搾ｽｵ�ｿｽ�ｽｽ�ｽｺ髯ｷ莨夲ｽｽ�ｽｱ驕ｯ�ｽｶ�ｿｽ�ｽｽ�ｽｻ鬮｣蛹��ｽｽ�ｽｳ髯滓汚�ｽｽ�ｽｱ驕ｶ謫ｾ�ｽｽ�ｽｴ鬩搾ｽｵ�ｿｽ�ｽｽ�ｽｺ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｦ鬩幢ｽ｢�ｿｽ�ｽｽ�ｽｧ髯具ｽｹ�ｿｽ�ｽｽ�ｽｻ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｼ隶捺慣�ｽｽ�ｽｸ�ｿｽ�ｽｽ�ｽｺ髯ｷ闌ｨ�ｽｽ�ｽｷ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｽ�ｿｽ�ｽｽ�ｽｼ�ｿｽ�ｽｿ�ｽｽ�ｿｽ�ｽｽ�ｽｿ�ｿｽ�ｽｽ�ｽｽ
+				// 
 				for (String datatypeURI : literalDatatypeSet) {
 					Resource ran = model.createResource(datatypeURI);
 					ran.addProperty(typePro, clsCls);
@@ -2564,7 +2590,7 @@ public class CrawlerImpl {
 			} catch (Exception ex) {
 				qexec.close();
 				if (i != 0) {
-					System.out.println(queryString);
+					System.out.println("The error caused by this query:\n" + queryString);
 					ex.printStackTrace();
 					throw ex;
 				}
@@ -2607,7 +2633,7 @@ public class CrawlerImpl {
 			try {
 				query = QueryFactory.create(queryString);
 			} catch (Exception ex) {
-				System.out.println(queryString);
+				System.out.println("The error caused by this query:\n" + queryString);
 				ex.printStackTrace();
 				throw ex;
 			}
@@ -2623,7 +2649,7 @@ public class CrawlerImpl {
 				// long end = System.currentTimeMillis();
 				// System.out.println("EXEC TIME: " + (end - start));
 			} catch (Exception ex) {
-				System.out.println(queryString);
+				System.out.println("The error caused by this query:\n" + queryString);
 				ex.printStackTrace();
 			}
 			qexec.close();
@@ -2639,7 +2665,7 @@ public class CrawlerImpl {
 
 
 	public URI[] getRDFProperties(URI graphURI) throws Exception {
-		String stepName = "getRDFProperties";
+//		String stepName = "getRDFProperties";
 
 		// QUERY 7 (Metadata Layer 2, 3)
 		// ---------------------------------------------------------------------------------
@@ -2651,7 +2677,7 @@ public class CrawlerImpl {
 		queryBuffer.append("PREFIX rdfs: <" + URICollection.PREFIX_RDFS + ">\n");
 		queryBuffer.append("PREFIX rdf: <" + URICollection.PREFIX_RDF + ">\n");
 
-		queryBuffer.append("SELECT DISTINCT ?p  \n");
+		queryBuffer.append("SELECT DISTINCT ?p \n");
 		if (graphURI != null ) {
 				queryBuffer.append("FROM <");
 				queryBuffer.append(graphURI.toString());
@@ -2724,9 +2750,14 @@ public class CrawlerImpl {
 
 		boolean errorFlag = false;
 		if (propertyURIs != null) {
-			String stepName = "getDatatypes";
-			for (URI propertyURI : propertyURIs) {
-				String target = propertyURI.toString();
+//			String stepName = "getDatatypes";
+			//String properties = String.join("", propertyURIs)
+			ArrayList<String> predicates = new ArrayList<String>();
+			Arrays.asList(propertyURIs).forEach(s -> predicates.add(s.toString()));
+//			System.out.println("<" + String.join("> <", predicates) + ">");
+
+//			for (URI propertyURI : propertyURIs) {
+//				String target = propertyURI.toString();
 				boolean targetErrorFlag = false;
 
 				// QUERY 19 (Metadata Layer 2,3)
@@ -2753,9 +2784,11 @@ public class CrawlerImpl {
 				// }
 				// }
 				queryBuffer.append("WHERE{\n");
-				queryBuffer.append(" [] <");
-				queryBuffer.append(propertyURI);
-				queryBuffer.append("> ?o.\n  FILTER(isLiteral(?o))\n");
+//				queryBuffer.append(" [] <");
+//				queryBuffer.append(propertyURI);
+//				queryBuffer.append("> ?o.\n  FILTER(isLiteral(?o))\n");
+				queryBuffer.append(" [] ?p ?o.\n  FILTER(isLiteral(?o))\n");
+				queryBuffer.append(" VALUES ?p {<" + String.join("> <", predicates) + ">}\n");
 				queryBuffer.append("}");
 				String queryString = queryBuffer.toString();
 
@@ -2764,24 +2797,31 @@ public class CrawlerImpl {
 				Query query = QueryFactory.create(queryString);
 
 				QueryExecution qexec = null;
+				QueryEngineHTTP alt_qexec = null;
 				ResultSet results = null;
-				String[] recoveredStringArray = null;
+//				String[] recoveredStringArray = null;
 
 				int sCount = 3;
 				while (sCount > 0) {
 					try {
 						// long start = System.currentTimeMillis();
+						alt_qexec = new QueryEngineHTTP(endpointURI.toString(), query);
+						alt_qexec.setTimeout(-1);
+
 						qexec = QueryExecutionFactory.sparqlService(endpointURI.toString(), query);
 						endpointAccessCount++;
 						qexec.setTimeout(-1);
 						interval();
-						results = qexec.execSelect();
+						alt_qexec.setAcceptHeader("text/csv");
+						System.out.println("Accept:" + alt_qexec.getAcceptHeader());
+						results = alt_qexec.execSelect();
+						//results = qexec.execSelect();
 						break;
 					} catch (Exception ex) {
 						sCount--;
 						if (sCount == 0) {
 							ex.printStackTrace();
-							System.out.println(queryString);
+							System.out.println("The error caused by this query:\n" + queryString);
 						} else {
 							interval_error();
 						}
@@ -2789,6 +2829,7 @@ public class CrawlerImpl {
 				}
 
 				if (!targetErrorFlag) {
+					/*
 					if (recoveredStringArray != null) {
 						String[] filterStrs = URICollection.FILTER_CLASS;
 						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
@@ -2797,26 +2838,26 @@ public class CrawlerImpl {
 								datatypes.add(litURI);
 							}
 						}
-					} else {
+					*/
+//					} else {
 						String[] filterStrs = URICollection.FILTER_CLASS;
 						String[] unfilterStrs = URICollection.UNFILTER_CLASS;
 						ArrayList<String> targetDataTypes = new ArrayList<String>();
 						for (; results.hasNext();) {
-							QuerySolution sol = results.next();
-							Resource lit = sol.getResource("ldt");
-							if (lit != null) {
-								String litURI = lit.getURI();
-								if (litURI != null) {
-									targetDataTypes.add(litURI);
-									if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
-										datatypes.add(litURI);
-									}
+							RDFNode lit = results.next().get("ldt");
+							String litURI = lit.toString();
+							if (litURI.length() > 0) {
+								targetDataTypes.add(litURI);
+								if (uriFilter(litURI, filterStrs, unfilterStrs) != null) {
+									System.out.println("litURI: " + litURI);
+									datatypes.add(litURI);
 								}
 							}
 						}
-					}
-				}
-				qexec.close();
+//					}
+//				}
+				alt_qexec.close();
+//				qexec.close();
 			}
 		}
 		if (!errorFlag) {
