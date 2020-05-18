@@ -13,7 +13,7 @@ Metadata definition and implementaton for LOD Surfer, a data search tool for lif
      -ac endpointURL crawlName outputFileName <br>
   3. to crawl the specified graph in the endpoint <br>
      -gc endpointURL crawlName graphURI outputFileName <br>  
-	4. to crawl the default named graph in the endpoint <br>
+  4. to crawl the default named graph in the endpoint <br>
      -d endpointURL crawlName outputFileName <br>  
 
 # development version
